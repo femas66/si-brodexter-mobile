@@ -31,8 +31,15 @@ import my.id.femasaf.brodexter.data.TransactionType
 import my.id.femasaf.brodexter.ui.theme.*
 import my.id.femasaf.brodexter.util.toRupiah
 
+import androidx.compose.material.icons.filled.CalendarToday
+import java.text.SimpleDateFormat
+import java.util.*
+
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
+fun DashboardScreen(
+    onSeeAllClick: () -> Unit,
+    viewModel: DashboardViewModel = viewModel()
+) {
     val balance by viewModel.balance.collectAsState()
     val income by viewModel.totalIncome.collectAsState()
     val expense by viewModel.totalExpense.collectAsState()
@@ -42,13 +49,14 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
         balance = balance,
         income = income,
         expense = expense,
-        transactions = transactions,
-        onAddTransaction = { amount, desc, type ->
-            viewModel.addTransaction(amount, desc, type)
+        transactions = transactions.take(5), // Hanya tampilkan 5 transaksi terakhir
+        onAddTransaction = { amount, desc, type, date ->
+            viewModel.addTransaction(amount, desc, type, date)
         },
         onDeleteTransaction = { transaction ->
             viewModel.deleteTransaction(transaction)
-        }
+        },
+        onSeeAllClick = onSeeAllClick
     )
 }
 
@@ -58,10 +66,12 @@ fun DashboardContent(
     income: Long,
     expense: Long,
     transactions: List<Transaction>,
-    onAddTransaction: (Long, String, TransactionType) -> Unit,
-    onDeleteTransaction: (Transaction) -> Unit
+    onAddTransaction: (Long, String, TransactionType, Long) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
+    onSeeAllClick: () -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
 
     Scaffold(
         containerColor = Background,
@@ -93,7 +103,16 @@ fun DashboardContent(
                 SummarySection(income = income.toRupiah(), expense = expense.toRupiah())
             }
             item {
-                SectionTitle("Transaksi Terakhir")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionTitle("Transaksi Terakhir")
+                    TextButton(onClick = onSeeAllClick) {
+                        Text("Lihat Semua", color = Primary, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             if (transactions.isEmpty()) {
                 item {
@@ -108,7 +127,7 @@ fun DashboardContent(
                         description = transaction.description,
                         amount = transaction.amount.toRupiah(),
                         type = transaction.type,
-                        onDelete = { onDeleteTransaction(transaction) }
+                        onDelete = { transactionToDelete = transaction }
                     )
                 }
             }
@@ -120,9 +139,33 @@ fun DashboardContent(
         if (showAddDialog) {
             AddTransactionDialog(
                 onDismiss = { showAddDialog = false },
-                onConfirm = { amountValue, desc, typeValue ->
-                    onAddTransaction(amountValue, desc, typeValue)
+                onConfirm = { amountValue, desc, typeValue, dateValue ->
+                    onAddTransaction(amountValue, desc, typeValue, dateValue)
                     showAddDialog = false
+                }
+            )
+        }
+
+        if (transactionToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { transactionToDelete = null },
+                title = { Text("Konfirmasi Hapus") },
+                text = { Text("Apakah Anda yakin ingin menghapus transaksi '${transactionToDelete?.description}'?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            transactionToDelete?.let { onDeleteTransaction(it) }
+                            transactionToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Alert)
+                    ) {
+                        Text("Hapus", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { transactionToDelete = null }) {
+                        Text("Batal")
+                    }
                 }
             )
         }
@@ -167,14 +210,19 @@ fun TransactionItem(description: String, amount: String, type: TransactionType, 
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionDialog(
     onDismiss: () -> Unit,
-    onConfirm: (Long, String, TransactionType) -> Unit
+    onConfirm: (Long, String, TransactionType, Long) -> Unit
 ) {
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(TransactionType.INCOME) }
+    var date by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    
+    val dateFormatter = remember { SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID")) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -194,6 +242,23 @@ fun AddTransactionDialog(
                     label = { Text("Keterangan") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                
+                OutlinedCard(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(20.dp), tint = Primary)
+                        Text(text = dateFormatter.format(Date(date)), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(
                         selected = type == TransactionType.INCOME,
@@ -214,7 +279,7 @@ fun AddTransactionDialog(
                 onClick = {
                     val amountLong = amount.toLongOrNull() ?: 0L
                     if (amountLong > 0 && description.isNotEmpty()) {
-                        onConfirm(amountLong, description, type)
+                        onConfirm(amountLong, description, type, date)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Primary)
@@ -228,6 +293,28 @@ fun AddTransactionDialog(
             }
         }
     )
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = date)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { date = it }
+                    showDatePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Batal")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 @Composable
@@ -351,55 +438,65 @@ fun TrendsChart(transactions: List<Transaction>) {
                     Text("Belum ada data untuk grafik", color = Muted, style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                val sortedTransactions = transactions.sortedBy { it.date }.takeLast(10)
-                val maxAmount = sortedTransactions.maxOfOrNull { it.amount } ?: 1L
+                val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+                val sortedTransactions = transactions
+                    .filter { it.date >= thirtyDaysAgo }
+                    .sortedBy { it.date }
                 
-                Canvas(modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 32.dp)) {
-                    val width = size.width
-                    val height = size.height
-                    val spacing = width / (if (sortedTransactions.size > 1) sortedTransactions.size - 1 else 1)
-                    
-                    val incomePath = Path()
-                    val expensePath = Path()
-                    
-                    var incomeStarted = false
-                    var expenseStarted = false
-
-                    sortedTransactions.forEachIndexed { index, transaction ->
-                        val x = index * spacing
-                        val y = height - (transaction.amount.toFloat() / maxAmount * height)
-                        
-                        if (transaction.type == TransactionType.INCOME) {
-                            if (!incomeStarted) {
-                                incomePath.moveTo(x, y)
-                                incomeStarted = true
-                            } else {
-                                incomePath.lineTo(x, y)
-                            }
-                            drawCircle(color = Success, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(x, y))
-                        } else {
-                            if (!expenseStarted) {
-                                expensePath.moveTo(x, y)
-                                expenseStarted = true
-                            } else {
-                                expensePath.lineTo(x, y)
-                            }
-                            drawCircle(color = Alert, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(x, y))
-                        }
+                if (sortedTransactions.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Tidak ada data dalam 30 hari terakhir", color = Muted, style = MaterialTheme.typography.bodyMedium)
                     }
+                } else {
+                    val maxAmount = sortedTransactions.maxOfOrNull { it.amount } ?: 1L
                     
-                    drawPath(
-                        path = incomePath,
-                        color = Success,
-                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                    drawPath(
-                        path = expensePath,
-                        color = Alert,
-                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                    )
+                    Canvas(modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp, vertical = 32.dp)) {
+                        val width = size.width
+                        val height = size.height
+                        val spacing = width / (if (sortedTransactions.size > 1) sortedTransactions.size - 1 else 1)
+                        
+                        val incomePath = Path()
+                        val expensePath = Path()
+                        
+                        var incomeStarted = false
+                        var expenseStarted = false
+
+                        sortedTransactions.forEachIndexed { index, transaction ->
+                            val x = index * spacing
+                            val y = height - (transaction.amount.toFloat() / maxAmount * height)
+                            
+                            if (transaction.type == TransactionType.INCOME) {
+                                if (!incomeStarted) {
+                                    incomePath.moveTo(x, y)
+                                    incomeStarted = true
+                                } else {
+                                    incomePath.lineTo(x, y)
+                                }
+                                drawCircle(color = Success, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(x, y))
+                            } else {
+                                if (!expenseStarted) {
+                                    expensePath.moveTo(x, y)
+                                    expenseStarted = true
+                                } else {
+                                    expensePath.lineTo(x, y)
+                                }
+                                drawCircle(color = Alert, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(x, y))
+                            }
+                        }
+                        
+                        drawPath(
+                            path = incomePath,
+                            color = Success,
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                        drawPath(
+                            path = expensePath,
+                            color = Alert,
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                    }
                 }
             }
         }
@@ -445,8 +542,9 @@ fun DashboardPreview() {
                 Transaction(2, TransactionType.EXPENSE, 250000, "Belanja Mingguan"),
                 Transaction(3, TransactionType.EXPENSE, 50000, "Makan Siang")
             ),
-            onAddTransaction = { _, _, _ -> },
-            onDeleteTransaction = {}
+            onAddTransaction = { _, _, _, _ -> },
+            onDeleteTransaction = {},
+            onSeeAllClick = {}
         )
     }
 }

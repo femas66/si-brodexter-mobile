@@ -4,9 +4,9 @@
 
 ## ✨ Fitur Utama
 - **Dashboard Ringkas**: Tampilan saldo total, pemasukan, dan pengeluaran secara real-time.
-- **Pencatatan Cepat**: Form tambah transaksi yang intuitif untuk pemasukan dan pengeluaran.
-- **Visualisasi Tren**: Grafik garis interaktif yang menunjukkan pergerakan keuangan dalam 10 transaksi terakhir.
-- **Riwayat Transaksi**: Daftar transaksi terbaru yang dapat dihapus jika terjadi kesalahan input.
+- **Riwayat Lengkap**: Halaman khusus riwayat transaksi dengan fitur filter (Semua, Pemasukan, Pengeluaran) dan sistem "Lihat lainnya" untuk performa optimal.
+- **Pencatatan Cepat**: Form tambah transaksi yang intuitif dengan dukungan pemilihan tanggal.
+- **Visualisasi Tren**: Grafik garis interaktif yang menunjukkan tren keuangan dalam 30 hari terakhir.
 - **Format Rupiah Otomatis**: Semua angka diformat secara otomatis ke mata uang Rupiah untuk memudahkan pembacaan.
 
 ## 🛠️ Tech Stack

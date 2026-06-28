@@ -42,9 +42,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
     }
 
-    fun addTransaction(amount: Long, description: String, type: TransactionType) {
+    fun addTransaction(amount: Long, description: String, type: TransactionType, date: Long = System.currentTimeMillis()) {
         viewModelScope.launch {
-            repository.insert(Transaction(type = type, amount = amount, description = description))
+            repository.insert(Transaction(type = type, amount = amount, description = description, date = date))
         }
     }
 
